@@ -7,14 +7,6 @@ import streamlit as st
 import pickle
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import accuracy_score
-import sklearn
 
 # ------------------ ACTIVE USER TRACKING ------------------
 
@@ -32,7 +24,7 @@ def load_users():
 
 def save_users(users):
     with open(USER_FILE, "w") as f:
-        json.dump(users, f)
+        json.dump(users, f, indent=4)
 
 def update_active_users(session_id):
     users = load_users()
@@ -58,16 +50,71 @@ if "session_id" not in st.session_state:
 
 active_users = update_active_users(st.session_state.session_id)
 
-# ------------------ AUTO REFRESH ---------------- --
-# 600 sec = 10 minutes
-st.markdown(
-    """
-    <meta http-equiv="refresh" content="600">
-    """,
-    unsafe_allow_html=True
-)
+# ------------------ INACTIVITY REFRESH (2 min) + POPUP ------------------
+
+st.markdown("""
+<script>
+let inactivityTime = 120000; // 2 minutes
+let warningTime = 5000;      // 5 seconds before refresh
+let timeout;
+let warningTimeout;
+
+function createPopup() {
+    let popup = document.getElementById("refresh-popup");
+    if (!popup) {
+        popup = document.createElement("div");
+        popup.id = "refresh-popup";
+        popup.style.position = "fixed";
+        popup.style.bottom = "20px";
+        popup.style.right = "20px";
+        popup.style.backgroundColor = "#262730";
+        popup.style.color = "white";
+        popup.style.padding = "12px 18px";
+        popup.style.borderRadius = "10px";
+        popup.style.zIndex = "9999";
+        popup.style.fontSize = "14px";
+        popup.style.display = "none";
+        document.body.appendChild(popup);
+    }
+    return popup;
+}
+
+function resetTimer() {
+    clearTimeout(timeout);
+    clearTimeout(warningTimeout);
+
+    let popup = createPopup();
+    popup.style.display = "none";
+
+    // show warning 5 sec before refresh
+    warningTimeout = setTimeout(() => {
+        let count = 5;
+        popup.style.display = "block";
+
+        let interval = setInterval(() => {
+            popup.innerHTML = "⚠️ Inactive. Refreshing in " + count + " sec...";
+            count--;
+
+            if (count < 0) {
+                clearInterval(interval);
+                location.reload();
+            }
+        }, 1000);
+
+    }, inactivityTime - warningTime);
+}
+
+// track user activity
+window.onload = resetTimer;
+document.onmousemove = resetTimer;
+document.onkeypress = resetTimer;
+document.onclick = resetTimer;
+document.onscroll = resetTimer;
+</script>
+""", unsafe_allow_html=True)
 
 # ------------------ TOP RIGHT UI ------------------
+
 st.markdown(f"""
 <div style="position: fixed; top: 70px; right: 20px; 
             background-color: #262730; color: white; 
@@ -79,21 +126,16 @@ st.markdown(f"""
 
 # ------------------ MAIN APP ------------------
 
-teams = ['Sunrisers Hyderabad',
- 'Mumbai Indians',
- 'Royal Challengers Bangalore',
- 'Kolkata Knight Riders',
- 'Kings XI Punjab',
- 'Chennai Super Kings',
- 'Rajasthan Royals',
- 'Delhi Capitals']
+teams = ['Sunrisers Hyderabad','Mumbai Indians','Royal Challengers Bangalore',
+         'Kolkata Knight Riders','Kings XI Punjab','Chennai Super Kings',
+         'Rajasthan Royals','Delhi Capitals']
 
-cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Indore', 'Kolkata', 'Delhi',
-       'Chandigarh', 'Jaipur', 'Chennai', 'Cape Town', 'Port Elizabeth',
-       'Durban', 'Centurion', 'East London', 'Johannesburg', 'Kimberley',
-       'Bloemfontein', 'Ahmedabad', 'Cuttack', 'Nagpur', 'Dharamsala',
-       'Visakhapatnam', 'Pune', 'Raipur', 'Ranchi', 'Abu Dhabi',
-       'Sharjah', 'Mohali', 'Bengaluru']
+cities = ['Hyderabad','Bangalore','Mumbai','Indore','Kolkata','Delhi',
+          'Chandigarh','Jaipur','Chennai','Cape Town','Port Elizabeth',
+          'Durban','Centurion','East London','Johannesburg','Kimberley',
+          'Bloemfontein','Ahmedabad','Cuttack','Nagpur','Dharamsala',
+          'Visakhapatnam','Pune','Raipur','Ranchi','Abu Dhabi',
+          'Sharjah','Mohali','Bengaluru']
 
 pipe = pickle.load(open('./pipe.pkl','rb'))
 
@@ -107,7 +149,6 @@ with col2:
     bowling_team = st.selectbox('Select the bowling team', sorted(teams))
 
 selected_city = st.selectbox('Select host city', sorted(cities))
-
 target = st.number_input('Target')
 
 col3, col4, col5 = st.columns(3)
