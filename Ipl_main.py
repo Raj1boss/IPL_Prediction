@@ -4,6 +4,7 @@ import uuid
 import json
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pickle
 import pandas as pd
 import numpy as np
@@ -11,7 +12,7 @@ import numpy as np
 # ------------------ ACTIVE USER TRACKING ------------------
 
 USER_FILE = "active_users.json"
-TIMEOUT = 120  # seconds (2 min)
+TIMEOUT = 120  # 2 min
 
 def load_users():
     if not os.path.exists(USER_FILE):
@@ -30,10 +31,8 @@ def update_active_users(session_id):
     users = load_users()
     current_time = time.time()
 
-    # update current user
     users[session_id] = current_time
 
-    # remove inactive users
     users = {
         uid: t for uid, t in users.items()
         if current_time - t < TIMEOUT
@@ -41,55 +40,50 @@ def update_active_users(session_id):
 
     save_users(users)
 
-    # always at least 1
     return max(len(users), 1)
 
-# unique session id
+# session id
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
 active_users = update_active_users(st.session_state.session_id)
 
-# ------------------ INACTIVITY REFRESH (2 min) + POPUP ------------------
+# ------------------ SMART REFRESH (WORKING) ------------------
 
-st.markdown("""
+components.html("""
 <script>
-let inactivityTime = 120000; // 2 minutes
-let warningTime = 5000;      // 5 seconds before refresh
-let timeout;
-let warningTimeout;
+let inactivityLimit = 120000; // 2 min
+let checkInterval = 60000;    // check every 1 min
+let lastActivity = Date.now();
 
-function createPopup() {
-    let popup = document.getElementById("refresh-popup");
-    if (!popup) {
-        popup = document.createElement("div");
-        popup.id = "refresh-popup";
+function updateActivity() {
+    lastActivity = Date.now();
+}
+
+// track user actions
+document.onmousemove = updateActivity;
+document.onkeypress = updateActivity;
+document.onclick = updateActivity;
+document.onscroll = updateActivity;
+
+// check every 1 min
+setInterval(() => {
+    let now = Date.now();
+    let inactiveTime = now - lastActivity;
+
+    if (inactiveTime >= inactivityLimit) {
+        // show popup
+        let count = 5;
+        let popup = document.createElement("div");
         popup.style.position = "fixed";
         popup.style.bottom = "20px";
         popup.style.right = "20px";
-        popup.style.backgroundColor = "#262730";
+        popup.style.background = "#262730";
         popup.style.color = "white";
-        popup.style.padding = "12px 18px";
+        popup.style.padding = "12px";
         popup.style.borderRadius = "10px";
         popup.style.zIndex = "9999";
-        popup.style.fontSize = "14px";
-        popup.style.display = "none";
         document.body.appendChild(popup);
-    }
-    return popup;
-}
-
-function resetTimer() {
-    clearTimeout(timeout);
-    clearTimeout(warningTimeout);
-
-    let popup = createPopup();
-    popup.style.display = "none";
-
-    // show warning 5 sec before refresh
-    warningTimeout = setTimeout(() => {
-        let count = 5;
-        popup.style.display = "block";
 
         let interval = setInterval(() => {
             popup.innerHTML = "⚠️ Inactive. Refreshing in " + count + " sec...";
@@ -101,19 +95,16 @@ function resetTimer() {
             }
         }, 1000);
 
-    }, inactivityTime - warningTime);
-}
+    } else {
+        // ACTIVE user → soft refresh every 1 min
+        location.reload();
+    }
 
-// track user activity
-window.onload = resetTimer;
-document.onmousemove = resetTimer;
-document.onkeypress = resetTimer;
-document.onclick = resetTimer;
-document.onscroll = resetTimer;
+}, checkInterval);
 </script>
-""", unsafe_allow_html=True)
+""", height=0)
 
-# ------------------ TOP RIGHT UI ------------------
+# ------------------ UI ------------------
 
 st.markdown(f"""
 <div style="position: fixed; top: 70px; right: 20px; 
