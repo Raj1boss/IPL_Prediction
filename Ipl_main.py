@@ -1,18 +1,16 @@
+import streamlit as st
+import pickle
+import pandas as pd
+import numpy as np
 import os
 import time
 import uuid
 import json
 
-import streamlit as st
-import streamlit.components.v1 as components
-import pickle
-import pandas as pd
-import numpy as np
-
 # ------------------ ACTIVE USER TRACKING ------------------
 
 USER_FILE = "active_users.json"
-TIMEOUT = 120  # 2 min
+TIMEOUT = 120  # seconds (2 min)
 
 def load_users():
     if not os.path.exists(USER_FILE):
@@ -25,14 +23,16 @@ def load_users():
 
 def save_users(users):
     with open(USER_FILE, "w") as f:
-        json.dump(users, f, indent=4)
+        json.dump(users, f)
 
 def update_active_users(session_id):
     users = load_users()
     current_time = time.time()
 
+    # update current user
     users[session_id] = current_time
 
+    # remove inactive users
     users = {
         uid: t for uid, t in users.items()
         if current_time - t < TIMEOUT
@@ -40,93 +40,50 @@ def update_active_users(session_id):
 
     save_users(users)
 
+    # always at least 1
     return max(len(users), 1)
 
-# session id
+# unique session id
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
 active_users = update_active_users(st.session_state.session_id)
 
-# ------------------ SMART REFRESH (WORKING) ------------------
+# ------------------ AUTO REFRESH ------------------
+# 600 sec = 10 minutes
+st.markdown(
+    """
+    <meta http-equiv="refresh" content="150">
+    """,
+    unsafe_allow_html=True
+)
 
-components.html("""
-<script>
-let inactivityLimit = 120000; // 2 min
-let checkInterval = 60000;    // check every 1 min
-let lastActivity = Date.now();
-
-function updateActivity() {
-    lastActivity = Date.now();
-}
-
-// track user actions
-document.onmousemove = updateActivity;
-document.onkeypress = updateActivity;
-document.onclick = updateActivity;
-document.onscroll = updateActivity;
-
-// check every 1 min
-setInterval(() => {
-    let now = Date.now();
-    let inactiveTime = now - lastActivity;
-
-    if (inactiveTime >= inactivityLimit) {
-        // show popup
-        let count = 5;
-        let popup = document.createElement("div");
-        popup.style.position = "fixed";
-        popup.style.bottom = "20px";
-        popup.style.right = "20px";
-        popup.style.background = "#262730";
-        popup.style.color = "white";
-        popup.style.padding = "12px";
-        popup.style.borderRadius = "10px";
-        popup.style.zIndex = "9999";
-        document.body.appendChild(popup);
-
-        let interval = setInterval(() => {
-            popup.innerHTML = "⚠️ Inactive. Refreshing in " + count + " sec...";
-            count--;
-
-            if (count < 0) {
-                clearInterval(interval);
-                location.reload();
-            }
-        }, 1000);
-
-    } else {
-        // ACTIVE user → soft refresh every 1 min
-        location.reload();
-    }
-
-}, checkInterval);
-</script>
-""", height=0)
-
-# ------------------ UI ------------------
-
+# ------------------ TOP RIGHT UI ------------------
 st.markdown(f"""
-<div style="position: fixed; top: 70px; right: 20px; 
+<div style="position: fixed; top: 10px; right: 20px; 
             background-color: #262730; color: white; 
-            padding: 10px 15px; border-radius: 10px;
-            z-index: 9999;">
+            padding: 10px 15px; border-radius: 10px;">
     👁️ {active_users} Views
 </div>
 """, unsafe_allow_html=True)
 
 # ------------------ MAIN APP ------------------
 
-teams = ['Sunrisers Hyderabad','Mumbai Indians','Royal Challengers Bangalore',
-         'Kolkata Knight Riders','Kings XI Punjab','Chennai Super Kings',
-         'Rajasthan Royals','Delhi Capitals']
+teams = ['Sunrisers Hyderabad',
+ 'Mumbai Indians',
+ 'Royal Challengers Bangalore',
+ 'Kolkata Knight Riders',
+ 'Kings XI Punjab',
+ 'Chennai Super Kings',
+ 'Rajasthan Royals',
+ 'Delhi Capitals']
 
-cities = ['Hyderabad','Bangalore','Mumbai','Indore','Kolkata','Delhi',
-          'Chandigarh','Jaipur','Chennai','Cape Town','Port Elizabeth',
-          'Durban','Centurion','East London','Johannesburg','Kimberley',
-          'Bloemfontein','Ahmedabad','Cuttack','Nagpur','Dharamsala',
-          'Visakhapatnam','Pune','Raipur','Ranchi','Abu Dhabi',
-          'Sharjah','Mohali','Bengaluru']
+cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Indore', 'Kolkata', 'Delhi',
+       'Chandigarh', 'Jaipur', 'Chennai', 'Cape Town', 'Port Elizabeth',
+       'Durban', 'Centurion', 'East London', 'Johannesburg', 'Kimberley',
+       'Bloemfontein', 'Ahmedabad', 'Cuttack', 'Nagpur', 'Dharamsala',
+       'Visakhapatnam', 'Pune', 'Raipur', 'Ranchi', 'Abu Dhabi',
+       'Sharjah', 'Mohali', 'Bengaluru']
 
 pipe = pickle.load(open('./pipe.pkl','rb'))
 
@@ -140,6 +97,7 @@ with col2:
     bowling_team = st.selectbox('Select the bowling team', sorted(teams))
 
 selected_city = st.selectbox('Select host city', sorted(cities))
+
 target = st.number_input('Target')
 
 col3, col4, col5 = st.columns(3)
