@@ -1,16 +1,18 @@
-import streamlit as st
-import pickle
-import pandas as pd
-import numpy as np
 import os
 import time
 import uuid
 import json
 
+import streamlit as st
+import streamlit.components.v1 as components
+import pickle
+import pandas as pd
+import numpy as np
+
 # ------------------ ACTIVE USER TRACKING ------------------
 
 USER_FILE = "active_users.json"
-TIMEOUT = 120  # seconds (2 min)
+TIMEOUT = 120  # 2 minutes
 
 def load_users():
     if not os.path.exists(USER_FILE):
@@ -23,7 +25,7 @@ def load_users():
 
 def save_users(users):
     with open(USER_FILE, "w") as f:
-        json.dump(users, f)
+        json.dump(users, f, indent=4)
 
 def update_active_users(session_id):
     users = load_users()
@@ -40,7 +42,6 @@ def update_active_users(session_id):
 
     save_users(users)
 
-    # always at least 1
     return max(len(users), 1)
 
 # unique session id
@@ -49,41 +50,39 @@ if "session_id" not in st.session_state:
 
 active_users = update_active_users(st.session_state.session_id)
 
-# ------------------ AUTO REFRESH ------------------
-# 600 sec = 10 minutes
-st.markdown(
-    """
-    <meta http-equiv="refresh" content="150">
-    """,
-    unsafe_allow_html=True
-)
+# ------------------ AUTO REFRESH EVERY 2 MIN ------------------
+
+components.html("""
+<script>
+setInterval(function(){
+    window.location.reload();
+}, 120000); // 2 minutes
+</script>
+""", height=0)
 
 # ------------------ TOP RIGHT UI ------------------
+
 st.markdown(f"""
-<div style="position: fixed; top: 10px; right: 20px; 
+<div style="position: fixed; top: 70px; right: 20px; 
             background-color: #262730; color: white; 
-            padding: 10px 15px; border-radius: 10px;">
+            padding: 10px 15px; border-radius: 10px;
+            z-index: 9999;">
     👁️ {active_users} Views
 </div>
 """, unsafe_allow_html=True)
 
 # ------------------ MAIN APP ------------------
 
-teams = ['Sunrisers Hyderabad',
- 'Mumbai Indians',
- 'Royal Challengers Bangalore',
- 'Kolkata Knight Riders',
- 'Kings XI Punjab',
- 'Chennai Super Kings',
- 'Rajasthan Royals',
- 'Delhi Capitals']
+teams = ['Sunrisers Hyderabad','Mumbai Indians','Royal Challengers Bangalore',
+         'Kolkata Knight Riders','Kings XI Punjab','Chennai Super Kings',
+         'Rajasthan Royals','Delhi Capitals']
 
-cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Indore', 'Kolkata', 'Delhi',
-       'Chandigarh', 'Jaipur', 'Chennai', 'Cape Town', 'Port Elizabeth',
-       'Durban', 'Centurion', 'East London', 'Johannesburg', 'Kimberley',
-       'Bloemfontein', 'Ahmedabad', 'Cuttack', 'Nagpur', 'Dharamsala',
-       'Visakhapatnam', 'Pune', 'Raipur', 'Ranchi', 'Abu Dhabi',
-       'Sharjah', 'Mohali', 'Bengaluru']
+cities = ['Hyderabad','Bangalore','Mumbai','Indore','Kolkata','Delhi',
+          'Chandigarh','Jaipur','Chennai','Cape Town','Port Elizabeth',
+          'Durban','Centurion','East London','Johannesburg','Kimberley',
+          'Bloemfontein','Ahmedabad','Cuttack','Nagpur','Dharamsala',
+          'Visakhapatnam','Pune','Raipur','Ranchi','Abu Dhabi',
+          'Sharjah','Mohali','Bengaluru']
 
 pipe = pickle.load(open('./pipe.pkl','rb'))
 
@@ -97,7 +96,6 @@ with col2:
     bowling_team = st.selectbox('Select the bowling team', sorted(teams))
 
 selected_city = st.selectbox('Select host city', sorted(cities))
-
 target = st.number_input('Target')
 
 col3, col4, col5 = st.columns(3)
