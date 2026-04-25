@@ -1,3 +1,8 @@
+import os
+import time
+import uuid
+import json
+
 import streamlit as st
 import pickle
 import pandas as pd
@@ -11,7 +16,68 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
 import sklearn
 
+# ------------------ ACTIVE USER TRACKING ------------------
 
+USER_FILE = "active_users.json"
+TIMEOUT = 120  # seconds (2 min)
+
+def load_users():
+    if not os.path.exists(USER_FILE):
+        return {}
+    try:
+        with open(USER_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_users(users):
+    with open(USER_FILE, "w") as f:
+        json.dump(users, f)
+
+def update_active_users(session_id):
+    users = load_users()
+    current_time = time.time()
+
+    # update current user
+    users[session_id] = current_time
+
+    # remove inactive users
+    users = {
+        uid: t for uid, t in users.items()
+        if current_time - t < TIMEOUT
+    }
+
+    save_users(users)
+
+    # always at least 1
+    return max(len(users), 1)
+
+# unique session id
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+active_users = update_active_users(st.session_state.session_id)
+
+# ------------------ AUTO REFRESH ---------------- --
+# 600 sec = 10 minutes
+st.markdown(
+    """
+    <meta http-equiv="refresh" content="600">
+    """,
+    unsafe_allow_html=True
+)
+
+# ------------------ TOP RIGHT UI ------------------
+st.markdown(f"""
+<div style="position: fixed; top: 70px; right: 20px; 
+            background-color: #262730; color: white; 
+            padding: 10px 15px; border-radius: 10px;
+            z-index: 9999;">
+    👁️ {active_users} Views
+</div>
+""", unsafe_allow_html=True)
+
+# ------------------ MAIN APP ------------------
 
 teams = ['Sunrisers Hyderabad',
  'Mumbai Indians',
@@ -30,22 +96,21 @@ cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Indore', 'Kolkata', 'Delhi',
        'Sharjah', 'Mohali', 'Bengaluru']
 
 pipe = pickle.load(open('./pipe.pkl','rb'))
+
 st.title('IPL Win Predictor')
 
 col1, col2 = st.columns(2)
 
-col1, col2 = st.columns(2)
-
 with col1:
-    batting_team = st.selectbox('Select the batting team',sorted(teams))
+    batting_team = st.selectbox('Select the batting team', sorted(teams))
 with col2:
-    bowling_team = st.selectbox('Select the bowling team',sorted(teams))
+    bowling_team = st.selectbox('Select the bowling team', sorted(teams))
 
-selected_city = st.selectbox('Select host city',sorted(cities))
+selected_city = st.selectbox('Select host city', sorted(cities))
 
 target = st.number_input('Target')
 
-col3,col4,col5 = st.columns(3)
+col3, col4, col5 = st.columns(3)
 
 with col3:
     score = st.number_input('Score')
@@ -56,18 +121,27 @@ with col5:
 
 if st.button('Predict Probability'):
     runs_left = target - score
-    balls_left = 120 - (overs*6)
+    balls_left = 120 - (overs * 6)
     wickets = 10 - wickets
-    crr = score/overs
-    rrr = (runs_left*6)/balls_left
 
-    input_df = pd.DataFrame({'batting_team':[batting_team],'bowling_team':[bowling_team],'city':[selected_city],'runs_left':[runs_left],'balls_left':[balls_left],'wickets':[wickets],'total_runs_x':[target],'crr':[crr],'rrr':[rrr]})
+    crr = score / overs if overs > 0 else 0
+    rrr = (runs_left * 6) / balls_left if balls_left > 0 else 0
+
+    input_df = pd.DataFrame({
+        'batting_team': [batting_team],
+        'bowling_team': [bowling_team],
+        'city': [selected_city],
+        'runs_left': [runs_left],
+        'balls_left': [balls_left],
+        'wickets': [wickets],
+        'total_runs_x': [target],
+        'crr': [crr],
+        'rrr': [rrr]
+    })
 
     result = pipe.predict_proba(input_df)
     loss = result[0][0]
     win = result[0][1]
-    st.header(batting_team + "- " + str(round(win*100)) + "%")
-    st.header(bowling_team + "- " + str(round(loss*100)) + "%")
 
-
-
+    st.header(batting_team + " - " + str(round(win * 100)) + "%")
+    st.header(bowling_team + " - " + str(round(loss * 100)) + "%")
